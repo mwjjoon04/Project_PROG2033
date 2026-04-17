@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1032803103136",
+    "project_id": "otakuuniverse-d82e0",
+    "storage_bucket": "otakuuniverse-d82e0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1032803103136:android:5437ce7bc8f00eb2c974c5",
+        "android_client_info": {
+          "package_name": "com.example.otaku_universe"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCeFyt44KV99ZT9FslErIgot-oAWDdDIs4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
