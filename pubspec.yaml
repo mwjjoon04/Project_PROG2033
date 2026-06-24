@@ -33,10 +33,10 @@ dependencies:
   # 用于跨多个屏幕的共享状态 [cite: 24]
   provider: ^6.1.2 
   # 用于集成外部数据源 (API) [cite: 32]
-  http: ^1.2.1 
+  http: ^1.6.0 
   # 用于持久化本地存储 [cite: 37]
   shared_preferences: ^2.2.3
-  flutter_tts: ^4.0.2
+  flutter_tts: ^4.2.5
   image_picker: ^1.1.2
 
   # The following adds the Cupertino Icons font to your application.
@@ -48,6 +48,8 @@ dependencies:
   url_launcher: ^6.3.2
   firebase_storage: ^13.2.0
   firebase_ai: ^3.11.0
+  just_audio: ^0.10.5
+  audio_session: ^0.2.3
 
 dev_dependencies:
   flutter_test:

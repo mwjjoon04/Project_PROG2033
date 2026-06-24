@@ -16,7 +16,7 @@ class AICreationScreen extends StatefulWidget {
 
 class _AICreationScreenState extends State<AICreationScreen> {
   final TextEditingController _promptController = TextEditingController();
-  final ImagePicker _picker = ImagePicker(); // 图片选择器实例
+  final ImagePicker _picker = ImagePicker(); 
 
   String? _userAvatar; 
 
@@ -30,7 +30,6 @@ class _AICreationScreenState extends State<AICreationScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       var doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      // 加上 if (mounted) 保护，防止报错
       if (mounted && doc.exists && doc.data() != null) {
         setState(() {
           _userAvatar = doc.data()!['avatarUrl'];
@@ -42,7 +41,7 @@ class _AICreationScreenState extends State<AICreationScreen> {
   bool _isLoading = false; 
   String? _generatedImageUrl; 
   String? _errorMessage; 
-  File? _uploadedImage; // 保存用户上传的参考图
+  File? _uploadedImage; 
   
   @override
   void dispose() {
@@ -50,7 +49,6 @@ class _AICreationScreenState extends State<AICreationScreen> {
     super.dispose();
   }
 
-  // 新增功能：从相册选择图片
   Future<void> _pickImage() async {
     try {
       final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
@@ -66,14 +64,12 @@ class _AICreationScreenState extends State<AICreationScreen> {
     }
   }
 
-  // 移除选择的图片
   void _clearUploadedImage() {
     setState(() {
       _uploadedImage = null;
     });
   }
 
-  // 连接真实的 AI 图像生成 API
   Future<void> _generateImage() async {
     if (_promptController.text.trim().isEmpty) {
       setState(() {
@@ -89,20 +85,12 @@ class _AICreationScreenState extends State<AICreationScreen> {
     });
 
     try {
-      // 构建真实的 API URL
-      // 我们在用户的提示词后面隐式加入 'anime style' 以确保生成动漫风格
-      String finalPrompt = "${_promptController.text}, high quality anime style, masterpiece";
-      
-      // 使用 Pollinations.ai 的真实绘图 API (基于 Stable Diffusion)
-      // 使用 Uri.encodeComponent 确保文本能够安全地在网址中传输
+      String cleanPrompt = _promptController.text.replaceAll('\n', ' ');
+      String finalPrompt = "$cleanPrompt, high quality anime style, masterpiece";
       String encodedPrompt = Uri.encodeComponent(finalPrompt);
-      
-      // 我们加上一个随机数(seed)来确保每次生成的图片都不一样
       int randomSeed = DateTime.now().millisecondsSinceEpoch;
-      String realApiUrl = 'https://image.pollinations.ai/prompt/$encodedPrompt?seed=$randomSeed&width=512&height=512&nologo=true'; // 这里替换成真正的 AI 图像生成 API URL，附带 prompt 参数
-
-      // 模拟网络等待时间（因为图片生成需要几秒钟）
-      await Future.delayed(const Duration(seconds: 3));
+      
+      String realApiUrl = 'https://image.pollinations.ai/prompt/$encodedPrompt?seed=$randomSeed&width=512&height=512'; 
 
       setState(() {
         _generatedImageUrl = realApiUrl;
@@ -110,21 +98,18 @@ class _AICreationScreenState extends State<AICreationScreen> {
       });
 
       try {
-        final user = FirebaseAuth.instance.currentUser; // 获取当前登录的用户
+        final user = FirebaseAuth.instance.currentUser; 
         if (user != null) {
-          // 在数据库中创建一个叫做 'user_images' 的集合（像是一个大文件夹）
           await FirebaseFirestore.instance.collection('user_images').add({
-            'userId': user.uid, // 绑定用户的专属 ID
-            'imageUrl': realApiUrl, // 保存生成的图片网址
-            'prompt': _promptController.text, // 保存对应的提示词
-            'timestamp': FieldValue.serverTimestamp(), // 记录生成的时间
+            'userId': user.uid, 
+            'imageUrl': realApiUrl, 
+            'prompt': _promptController.text, 
+            'timestamp': FieldValue.serverTimestamp(), 
           });
         }
       } catch (e) {
-        // 如果保存失败，可以在终端看到报错信息
         debugPrint("Error saving to cloud: $e"); 
       }
-      
       
       if (mounted) {
         Provider.of<VaultProvider>(context, listen: false).addImageToVault(realApiUrl);
@@ -138,22 +123,40 @@ class _AICreationScreenState extends State<AICreationScreen> {
     }
   }
 
+  void _showHistoryBottomSheet(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please login first.')));
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, 
+      isDismissible: true, 
+      enableDrag: true,    
+      backgroundColor: Colors.transparent, 
+      builder: (BuildContext context) {
+        return HistorySheetContent(userId: user.uid);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent, 
       appBar: AppBar(
-        title: const Text('Otaku Universe'), // 标题移到了这里
+        title: const Text('Otaku Universe'), 
         backgroundColor: Colors.transparent,
         elevation: 0,
-
         actions: [
           GestureDetector(
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const ProfileScreen()),
-              ).then((_) => _loadUserAvatar()); // 从 Profile 返回后刷新头像
+              ).then((_) => _loadUserAvatar()); 
             },
             child: Padding(
               padding: const EdgeInsets.only(right: 16.0),
@@ -170,86 +173,99 @@ class _AICreationScreenState extends State<AICreationScreen> {
             ),
           ),
         ],
-
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-          // 如果用户上传了图片，显示预览图
-          if (_uploadedImage != null)
-            Stack(
-              children: [
-                Container(
-                  height: 100,
-                  width: 100,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.deepPurple, width: 2),
-                    image: DecorationImage(
-                      image: FileImage(_uploadedImage!),
-                      fit: BoxFit.cover,
+            if (_uploadedImage != null)
+              Stack(
+                children: [
+                  Container(
+                    height: 100,
+                    width: 100,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.deepPurple, width: 2),
+                      image: DecorationImage(
+                        image: FileImage(_uploadedImage!),
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
-                ),
-                // 关闭按钮
-                Positioned(
-                  top: -10,
-                  right: -10,
-                  child: IconButton(
-                    icon: const Icon(Icons.cancel, color: Colors.redAccent),
-                    onPressed: _clearUploadedImage,
+                  Positioned(
+                    top: -10,
+                    right: -10,
+                    child: IconButton(
+                      icon: const Icon(Icons.cancel, color: Colors.redAccent),
+                      onPressed: _clearUploadedImage,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
 
-          TextField(
-            controller: _promptController,
-            decoration: InputDecoration(
-              labelText: 'Enter your prompt (e.g., Cyberpunk Samurai)',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+            TextField(
+              controller: _promptController,
+              decoration: InputDecoration(
+                labelText: 'Enter your prompt (e.g., Cyberpunk Samurai)',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                prefixIcon: const Icon(Icons.brush),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.add_photo_alternate, color: Colors.deepPurpleAccent),
+                  onPressed: _pickImage,
+                  tooltip: 'Upload reference image',
+                ),
               ),
-              filled: true,
-              prefixIcon: const Icon(Icons.brush),
-              // 新增：输入框里的上传图片按钮
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.add_photo_alternate, color: Colors.deepPurpleAccent),
-                onPressed: _pickImage,
-                tooltip: 'Upload reference image',
+              maxLines: 3,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _generateImage, 
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: _isLoading 
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Generate AI Image', style: TextStyle(fontSize: 16)),
+            ),
+            const SizedBox(height: 24),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.deepPurple, width: 2),
+                ),
+                child: _buildResultArea(),
               ),
             ),
-            maxLines: 3,
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _isLoading ? null : _generateImage, 
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+            
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.history, color: Colors.deepPurpleAccent),
+              label: const Text(
+                'View History', 
+                style: TextStyle(color: Colors.deepPurpleAccent, fontSize: 16, fontWeight: FontWeight.bold)
               ),
-            ),
-            child: _isLoading 
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Generate AI Image', style: TextStyle(fontSize: 16)),
-          ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.black26,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.deepPurple, width: 2),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                side: const BorderSide(color: Colors.deepPurpleAccent, width: 2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-              child: _buildResultArea(),
+              onPressed: () => _showHistoryBottomSheet(context),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -264,14 +280,7 @@ class _AICreationScreenState extends State<AICreationScreen> {
         borderRadius: BorderRadius.circular(14),
         child: Image.network(
           _generatedImageUrl!, 
-          
-          // --- THE MAGIC DISGUISE ---
-          // This tells the AI server: "I am a normal Google Chrome browser on Windows, please let me in!"
-          headers: const {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-          },
-          // --------------------------
-
+          headers: const {"User-Agent": "Mozilla/5.0"},
           fit: BoxFit.cover,
           loadingBuilder: (context, child, loadingProgress) {
             if (loadingProgress == null) return child;
@@ -293,11 +302,203 @@ class _AICreationScreenState extends State<AICreationScreen> {
       );
     } else {
       return const Center(
-        child: Text(
-          'Your generated artwork will appear here',
-          style: TextStyle(color: Colors.grey),
-        ),
+        child: Text('Your generated artwork will appear here', style: TextStyle(color: Colors.grey)),
       );
     }
+  }
+}
+
+class HistorySheetContent extends StatefulWidget {
+  final String userId;
+  const HistorySheetContent({super.key, required this.userId});
+
+  @override
+  State<HistorySheetContent> createState() => _HistorySheetContentState();
+}
+
+class _HistorySheetContentState extends State<HistorySheetContent> {
+  late Stream<QuerySnapshot> _historyStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _historyStream = FirebaseFirestore.instance
+        .collection('user_images')
+        .where('userId', isEqualTo: widget.userId)
+        .snapshots();
+  }
+
+  Future<void> _deleteImage(String docId) async {
+    try {
+      await FirebaseFirestore.instance.collection('user_images').doc(docId).delete();
+    } catch (e) {
+      debugPrint('Error deleting image: $e');
+    }
+  }
+
+  Future<void> _downloadImage(BuildContext context, String url) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Downloading image to gallery... (Requires image_gallery_saver package)'),
+        backgroundColor: Colors.deepPurpleAccent,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        Navigator.of(context).pop(); 
+      },
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.6, 
+        minChildSize: 0.4,     
+        maxChildSize: 0.9,     
+        builder: (BuildContext context, ScrollController scrollController) {
+          return GestureDetector(
+            onTap: () {}, 
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 5,
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  const Text('My Generation History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+                  const SizedBox(height: 10),
+                  
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: _historyStream, 
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return Center(child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Text('Error: ${snapshot.error}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent)),
+                          ));
+                        }
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator(color: Colors.deepPurpleAccent));
+                        }
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return const Center(child: Text('No images generated yet.', style: TextStyle(color: Colors.grey)));
+                        }
+
+                        final List<DocumentSnapshot> docs = snapshot.data!.docs.toList();
+                        
+                        docs.sort((a, b) {
+                          final Map<String, dynamic>? aData = a.data() as Map<String, dynamic>?;
+                          final Map<String, dynamic>? bData = b.data() as Map<String, dynamic>?;
+                          
+                          final Timestamp? aTime = aData?['timestamp'] as Timestamp?;
+                          final Timestamp? bTime = bData?['timestamp'] as Timestamp?;
+                          
+                          if (aTime == null && bTime == null) return 0; 
+                          if (aTime == null) return 1;
+                          if (bTime == null) return -1;
+                          return bTime.compareTo(aTime); 
+                        });
+
+                        return GridView.builder(
+                          controller: scrollController,
+                          padding: const EdgeInsets.all(12),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2, 
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                          ),
+                          itemCount: docs.length,
+                          itemBuilder: (context, index) {
+                            var data = docs[index].data() as Map<String, dynamic>;
+                            String docId = docs[index].id;
+                            String imageUrl = data['imageUrl'] ?? '';
+                            String prompt = data['prompt'] ?? 'No prompt';
+
+                            return Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(
+                                    imageUrl, 
+                                    fit: BoxFit.cover,
+                                    // 🌟 终极核心优化：强行在解码阶段下采样压缩为 200x200，斩断显卡内存 ANR 卡死！
+                                    cacheWidth: 200,
+                                    cacheHeight: 200,
+                                    headers: const {"User-Agent": "Mozilla/5.0"},
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return const Center(child: CircularProgressIndicator());
+                                    },
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 0,
+                                  left: 0,
+                                  right: 0,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.6),
+                                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.download, color: Colors.white, size: 20),
+                                          onPressed: () => _downloadImage(context, imageUrl),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                                          onPressed: () => _deleteImage(docId),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 4,
+                                  left: 4,
+                                  right: 4,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black45,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      prompt, 
+                                      maxLines: 1, 
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                                    ),
+                                  ),
+                                )
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }

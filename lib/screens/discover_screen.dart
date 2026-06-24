@@ -12,22 +12,29 @@ class DiscoverScreen extends StatefulWidget {
 
 class _DiscoverScreenState extends State<DiscoverScreen> {
   final PageController _pageController = PageController();
-   // 你的类名可能叫别的
-  // 1. 声明头像变量
+  
+  // 1. Declare avatar variable
   String? _userAvatar; 
 
-  // 2. 页面一打开就去读取头像
+  // 2. Load avatar when page opens
   @override
   void initState() {
     super.initState();
     _loadUserAvatar();
   }
 
-  // 3. 去云端抓取头像路径的函数
-  void _loadUserAvatar() async {
+  // 🌟 FIX 1: Added dispose() to prevent memory leaks from the PageController
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  // 🌟 FIX 2: Changed 'void' to 'Future<void>' for async function
+  Future<void> _loadUserAvatar() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      var doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       if (mounted && doc.exists && doc.data() != null) {
         setState(() {
           _userAvatar = doc.data()!['avatarUrl'];
@@ -36,24 +43,22 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     }
   }
   
-  // ... 下面是你原本的代码 (比如 @override Widget build)
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-     
+      
       appBar: AppBar(
         title: const Text('Mini Game'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-       actions: [
-          // 动态显示选中的动漫头像
+        actions: [
           GestureDetector(
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const ProfileScreen()),
-              ).then((_) => _loadUserAvatar()); // 重点：从个人主页返回时自动刷新头像！
+              ).then((_) => _loadUserAvatar()); 
             },
             child: Padding(
               padding: const EdgeInsets.only(right: 16.0),
@@ -71,7 +76,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           ),
         ],
       ),
-     
+      
       body: Stack(
         children: [
           PageView(
@@ -82,6 +87,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               HeadpatSimulatorGame(), // Nezuko
             ],
           ),
+        
           // Swipe Indicator
           Positioned(
             bottom: 30,
@@ -144,13 +150,16 @@ class _BountyClickerGameState extends State<BountyClickerGame> with SingleTicker
           child: ScaleTransition(scale: _animation, child: const Text('👒', style: TextStyle(fontSize: 100))),
         ),
         const SizedBox(height: 40),
-        Text('฿ ${_score.toString()}', style: const TextStyle(fontSize: 32, color: Colors.white, fontWeight: FontWeight.bold)),
+        Text('฿ $_score', style: const TextStyle(fontSize: 32, color: Colors.white, fontWeight: FontWeight.bold)),
       ],
     );
   }
 
   @override
-  void dispose() { _controller.dispose(); super.dispose(); }
+  void dispose() { 
+    _controller.dispose(); 
+    super.dispose(); 
+  }
 }
 
 // --- GAME 2: TANJIRO'S BREATHING TRAINER ---
@@ -209,7 +218,10 @@ class _BreathingTrainerGameState extends State<BreathingTrainerGame> with Single
   }
 
   @override
-  void dispose() { _breathingController.dispose(); super.dispose(); }
+  void dispose() { 
+    _breathingController.dispose(); 
+    super.dispose(); 
+  }
 }
 
 // --- GAME 3: NEZUKO'S HEADPAT SIMULATOR ---
@@ -248,7 +260,7 @@ class _HeadpatSimulatorGameState extends State<HeadpatSimulatorGame> {
               color: Colors.pink.withOpacity(0.1),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Text('🍱', style: TextStyle(fontSize: 100)), // Nezuko placeholder
+            child: const Text('🍱', style: TextStyle(fontSize: 100)), 
           ),
         ),
         const SizedBox(height: 40),
