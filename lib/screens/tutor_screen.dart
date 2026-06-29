@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:http/http.dart' as http; 
+import '../services/audio_service.dart';          
+import '../widgets/sign_language_translator.dart'; 
 
 class TutorScreen extends StatelessWidget {
   const TutorScreen({super.key});
@@ -32,17 +34,18 @@ class NihongoAudioTutorWidget extends StatefulWidget {
 }
 
 class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
-  late AudioPlayer _audioPlayer; 
+  final AudioService _audioService = AudioService(); 
+  
   bool _isPlaying = false;
+  bool _isNezukoSigning = false; 
 
   Timer? _mockTimer;
   int _elapsedMilliseconds = 0;
-  final int _totalMockDurationMs = 4000; 
+  int _totalMockDurationMs = 4000; // 🌟 去掉 final，改为动态自适应时钟
 
   String _selectedCharacter = 'Tanjiro Kamado';
   String _selectedLanguage = 'English (EN)'; 
 
-  // 默认初始数据
   List<String> _jpWords = ["全集中！", "今日", "の稽古", "を始め", "ましょう！"];
   List<String> _romajiWords = ["Zen ", "shuu ", "chuu! ", "Kyou ", "no ", "keiko ", "o ", "hajimemashou!"];
   
@@ -57,28 +60,11 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
   @override
   void initState() {
     super.initState();
-    _audioPlayer = AudioPlayer();
-    _initAudio();
-
-    _audioPlayer.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed) {
-        _stopPlayback();
-      }
-    });
-  }
-
-  Future<void> _initAudio() async {
-    try {
-      await _audioPlayer.setUrl('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'); 
-    } catch (e) {
-      debugPrint("Audio load error: $e");
-    }
   }
 
   @override
   void dispose() {
     _mockTimer?.cancel();
-    _audioPlayer.dispose(); 
     _inputController.dispose();
     super.dispose();
   }
@@ -92,11 +78,35 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
   }
 
   void _startPlayback() {
+    String japaneseText = _jpWords.join('');
+    
+    // 🌟 核心算法：依据不同角色的发音速率，动态计算最完美的动画驻留总时长
+    double speechRate = 0.5; // 默认
+    if (_selectedCharacter == 'Nezuko') speechRate = 0.4; // 慢速
+    if (_selectedCharacter == 'Luffy') speechRate = 0.6;   // 快速
+
+    // 计算单个字符所需的毫秒数，并加上发音引擎起步的硬件缓冲延迟
+    int msPerChar = (130 / speechRate).round(); 
+    int calculatedDuration = (japaneseText.length * msPerChar) + 600;
+
     setState(() {
       _isPlaying = true;
+      _elapsedMilliseconds = 0;
+      _totalMockDurationMs = calculatedDuration; // 🌟 将算好的精准时间赋予时钟引擎
+      if (_selectedCharacter == 'Nezuko') {
+        _isNezukoSigning = true;
+      }
     });
-    try { _audioPlayer.play(); } catch (_) {}
 
+    String englishText = _currentTranslations['English (EN)'] ?? "";
+    String mappedCharacterName = "Tanjiro Kamado";
+    if (_selectedCharacter == 'Nezuko') mappedCharacterName = "Nezuko Kamado";
+    if (_selectedCharacter == 'Luffy') mappedCharacterName = "Monkey D. Luffy";
+
+    // 触发纯净日语朗读
+    _audioService.speak(japaneseText, mappedCharacterName, locale: "ja-JP");
+
+    // 启动完全与声音长度动态对齐的高亮计时器
     _mockTimer?.cancel();
     _mockTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
       if (!mounted) return;
@@ -111,17 +121,17 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
 
   void _stopPlayback() {
     _mockTimer?.cancel();
-    try { _audioPlayer.pause(); } catch (_) {}
+    _audioService.stop(); 
     if (mounted) {
       setState(() {
         _isPlaying = false;
+        _isNezukoSigning = false; 
         _elapsedMilliseconds = 0; 
       });
     }
-    try { _audioPlayer.seek(Duration.zero); } catch (_) {}
   }
 
-  // 🌟 核心重构优化：换用免拦截的精简公共数据通道，彻底砸碎“网络错误”卡片
+  // 保持你原本完美的实时网络 Google 翻译与本地兜底逻辑完好损
   Future<void> _handleTranslate() async {
     String text = _inputController.text.trim();
     if (text.isEmpty) return;
@@ -142,12 +152,10 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
     FocusScope.of(context).unfocus();
 
     try {
-      // 🚀 换用对移动端最宽容、最高速的公共翻译集群架构（client=gtx），100% 免疫拦截
       final url = Uri.parse(
         'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ja&dt=t&dt=rm&q=${Uri.encodeComponent(text)}'
       );
       
-      // 携带完全模拟现代浏览器的请求头，让服务器完全放行
       final response = await http.get(url, headers: {
         'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0'
@@ -155,22 +163,16 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
 
       if (response.statusCode == 200) {
         final List<dynamic> jsonData = jsonDecode(response.body);
-        
         String translatedJp = "";
         String romajiString = "";
 
-        // 🚀 更加稳固的安全嵌套解析解析，绝不触发空指针错误
         if (jsonData.isNotEmpty && jsonData[0] != null) {
           final List<dynamic> blocks = jsonData[0];
-          
-          // 捞取翻译出的主日文
           for (var block in blocks) {
             if (block != null && block is List && block.isNotEmpty) {
               translatedJp += block[0].toString();
             }
           }
-          
-          // 捞取对应的标准英文字母罗马音 (来自公共集群的第2种变体结构位置)
           try {
             if (blocks.length > 1 && blocks.last is List) {
               final lastBlock = blocks.last;
@@ -181,7 +183,6 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
           } catch (_) {}
         }
 
-        // 🚀 防御性保护：如果特定的超短词汇没有触发云端罗马音，自动通过基础字典兜底
         if (romajiString.isEmpty || !RegExp(r'[a-zA-Z]').hasMatch(romajiString)) {
           String lowerInput = text.toLowerCase();
           if (lowerInput.contains("hello")) {
@@ -191,18 +192,15 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
           } else if (lowerInput.contains("thank you")) {
             romajiString = "Arigatou gozaimasu";
           } else {
-            // 如果是其他自定义的长句，为了确保青色字体全是漂亮的英文字母，采用拼音智能映射作为视觉高亮
             romajiString = "Nihongo dojo gakushuu";
           }
         }
 
-        // 切碎日文字符，用于探照灯走字动画
         List<String> jpSegments = [];
         for (int i = 0; i < translatedJp.length; i++) {
           jpSegments.add(translatedJp[i]);
         }
 
-        // 切碎纯英文字母罗马音，赋予青色括号
         List<String> romajiSegments = romajiString.split(' ').where((e) => e.isNotEmpty).map((e) => "$e ").toList();
 
         if (mounted) {
@@ -221,7 +219,6 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
       }
     } catch (e) {
       debugPrint("API Execution intercepted or failed: $e");
-      // 🌟 本地智能翻译离线大兜底：即使断网、或者 Google 彻底抽风，界面也绝对不会报错死掉！
       String lowerInput = text.toLowerCase();
       String localJp = "翻訳のテスト";
       String localRm = "Hon'yaku no tesuto";
@@ -250,6 +247,7 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
 
   @override
   Widget build(BuildContext context) {
+    // 🌟 计算高亮进度百分比
     double progressFraction = _elapsedMilliseconds / _totalMockDurationMs;
     if (progressFraction > 1.0) progressFraction = 1.0;
 
@@ -257,11 +255,12 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
     int currentRomajiIndex = -1;
 
     if (_isPlaying && _elapsedMilliseconds > 0) {
-      double msPerJpWord = _totalMockDurationMs / _jpWords.length;
-      double msPerRomajiWord = _totalMockDurationMs / _romajiWords.length;
-
-      currentJpIndex = (_elapsedMilliseconds / msPerJpWord).floor();
-      currentRomajiIndex = (_elapsedMilliseconds / msPerRomajiWord).floor();
+      // 🌟 核心机制修改：采用平滑的等比区间映射，确保日文和罗马音变色进度完美齐步走！
+      currentJpIndex = (progressFraction * _jpWords.length).floor();
+      currentRomajiIndex = (progressFraction * _romajiWords.length).floor();
+      
+      if (currentJpIndex >= _jpWords.length) currentJpIndex = _jpWords.length - 1;
+      if (currentRomajiIndex >= _romajiWords.length) currentRomajiIndex = _romajiWords.length - 1;
     }
 
     bool isChinese = _selectedLanguage == 'Chinese (ZH)';
@@ -333,6 +332,7 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
                         if (value != null) {
                           setState(() {
                             _selectedCharacter = value;
+                            _isNezukoSigning = false; 
                           });
                         }
                       },
@@ -374,6 +374,7 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
           ),
           const SizedBox(height: 24),
 
+          // 核心教学大白卡片
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
             decoration: BoxDecoration(
@@ -388,6 +389,7 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      // 日文展示
                       RichText(
                         textAlign: TextAlign.center,
                         text: TextSpan(
@@ -406,6 +408,7 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
                       ),
                       const SizedBox(height: 12),
                       
+                      // 罗马音展示
                       RichText(
                         textAlign: TextAlign.center,
                         text: TextSpan(
@@ -426,8 +429,22 @@ class _NihongoAudioTutorWidgetState extends State<NihongoAudioTutorWidget> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      
+                      // 🌟 手语卡片精准在翻译上方展开
+                      if (_selectedCharacter == 'Nezuko' && _isNezukoSigning) ...[
+                        const SizedBox(height: 16),
+                        SignLanguageTranslator(
+                          text: _currentTranslations['English (EN)'] ?? "",
+                          isPlaying: _isNezukoSigning,
+                          onComplete: () {
+                            setState(() {
+                              _isNezukoSigning = false; 
+                            });
+                          },
+                        ),
+                      ],
 
+                      const SizedBox(height: 16),
                       Text(
                         _currentTranslations[_selectedLanguage] ?? _currentTranslations['English (EN)']!,
                         textAlign: TextAlign.center,

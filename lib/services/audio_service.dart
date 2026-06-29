@@ -13,7 +13,7 @@ class AudioService {
     // 初始化 TTS 音质前，先调用总指挥官配置，彻底理顺手机声卡通道
     await _configureAudioSession();
 
-    await _flutterTts.setLanguage("en-US"); // We will use English for now
+    await _flutterTts.setLanguage("ja-JP"); // 🌟 默认直接切换为地道的纯正日语发音引擎
     await _flutterTts.setSpeechRate(0.5);   // Speed of the voice
     await _flutterTts.setPitch(1.2);        // Slightly higher pitch for an anime feel
   }
@@ -25,10 +25,9 @@ class AudioService {
       await session.configure(AudioSessionConfiguration(
         avAudioSessionCategory: AVAudioSessionCategory.playback,
         avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.defaultToSpeaker,
-        // For Android: tells the OS this stream is speech, avoiding standard media ducking mix-ups
         androidAudioAttributes: const AndroidAudioAttributes(
           contentType: AndroidAudioContentType.speech,
-          usage: AndroidAudioUsage.assistanceAccessibility, // 🌟 修复完成：已更正为官方正确的底层枚举名，红线彻底消除！
+          usage: AndroidAudioUsage.assistanceAccessibility, 
         ),
         androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransient,
       ));
@@ -37,11 +36,13 @@ class AudioService {
     }
   }
 
-  // Function to play the audio
-  // Function to play the audio with character-specific voices
-  Future<void> speak(String text, String characterName) async {
+  // 🌟 动态语言支持：增加 locale 参数，默认直接以日语 "ja-JP" 格式进行动漫配音
+  Future<void> speak(String text, String characterName, {String locale = "ja-JP"}) async {
     await _flutterTts.stop(); // Stop any currently playing audio
-    await _flutterTts.setVolume(0.9); // Set volume to 90% (保持你最初代码的 0.9)
+    await _flutterTts.setVolume(1.0); // 100% 满额系统最大软件音量
+    
+    // 🌟 根据传入的指令，动态切换引擎语种（如日语 ja-JP 或英文 en-US）
+    await _flutterTts.setLanguage(locale); 
 
     // Adjust the voice profile based on the character
     if (characterName == "Nezuko Kamado") {
